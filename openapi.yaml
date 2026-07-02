@@ -1,0 +1,444 @@
+openapi: 3.1.0
+info:
+  title: 山海灵感便利店领域 API
+  version: 2.0.0
+  description: App 用户接口与管理端事务动作。字段统一 snake_case，金额统一十进制字符串。
+servers:
+  - url: http://localhost:3000/api/v1
+tags:
+  - { name: Auth, description: 用户认证 }
+  - { name: Catalog, description: 首页与商品 }
+  - { name: Cart, description: 购物车 }
+  - { name: Orders, description: 结算与订单 }
+  - { name: Payments, description: 支付退款 }
+  - { name: Admin, description: 管理端动作 }
+paths:
+  /health:
+    get:
+      summary: 数据库健康检查
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /auth/phone/login:
+    post:
+      tags: [Auth]
+      summary: 手机验证码登录（当前仅非生产开发桩）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string, pattern: '^1\d{10}$' }
+                code: { type: string }
+                device: { type: string }
+                platform: { type: string, enum: [android, ios, pc] }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
+  /auth/oauth/login:
+    post:
+      tags: [Auth]
+      summary: 微信或 Apple 登录（需配置验证适配器）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identity_type, identifier]
+              properties:
+                identity_type: { type: string, enum: [wechat, apple] }
+                identifier: { type: string }
+                credential: { type: string }
+                phone: { type: string, description: 首次登录时必填 }
+                device: { type: string }
+                platform: { type: string, enum: [android, ios, pc] }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "503": { $ref: "#/components/responses/Error" } }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 轮换用户会话
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      security: [{ UserBearer: [] }]
+      summary: 退出当前会话
+      responses: { "204": { description: 已退出 }, "401": { $ref: "#/components/responses/Error" } }
+  /me:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 当前用户及收藏、券、订单统计
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+    patch:
+      security: [{ UserBearer: [] }]
+      summary: 修改昵称或头像
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { nickname: { type: [string, "null"] }, avatar_url: { type: [string, "null"], format: uri } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /me/coupons:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 我的优惠券
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [unused, used, expired] } }]
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /home:
+    get:
+      tags: [Catalog]
+      summary: 首页 Banner、分类和推荐聚合
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /categories:
+    get:
+      tags: [Catalog]
+      summary: 分类树
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /products:
+    get:
+      tags: [Catalog]
+      summary: 商品分页
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: keyword, in: query, schema: { type: string, maxLength: 64 } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, sales, price_asc, price_desc] } }
+      responses: { "200": { $ref: "#/components/responses/List" } }
+  /products/{id}:
+    get:
+      tags: [Catalog]
+      summary: 商品、SKU、规格及收藏状态
+      security: [{}, { UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/Error" } }
+  /cart:
+    get:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      summary: 购物车及金额汇总
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /cart/items:
+    post:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      summary: 加入购物车；相同商品和 SKU 累加
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CartItemInput" } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+    delete:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      summary: 清空购物车
+      parameters: [{ name: selected, in: query, schema: { type: boolean, default: false } }]
+      responses: { "204": { description: 已清空 } }
+  /cart/items/{id}:
+    patch:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 修改本人购物车数量或选中状态
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { qty: { type: integer, minimum: 1 }, selected: { type: boolean } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+    delete:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 删除本人购物车条目
+      responses: { "204": { description: 已删除 } }
+  /cart/selection:
+    patch:
+      tags: [Cart]
+      security: [{ UserBearer: [] }]
+      summary: 全选或批量选择
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [selected], properties: { selected: { type: boolean }, item_ids: { type: array, items: { $ref: "#/components/schemas/Id" } } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /favorites:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 我的收藏分页
+      responses: { "200": { $ref: "#/components/responses/List" } }
+  /favorites/{productId}:
+    parameters: [{ name: productId, in: path, required: true, schema: { $ref: "#/components/schemas/Id" } }]
+    put:
+      security: [{ UserBearer: [] }]
+      summary: 幂等收藏
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+    delete:
+      security: [{ UserBearer: [] }]
+      summary: 幂等取消收藏
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /addresses:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 本人地址列表
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+    post:
+      security: [{ UserBearer: [] }]
+      summary: 新增地址；首个地址自动默认
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressInput" } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+  /addresses/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      security: [{ UserBearer: [] }]
+      summary: 修改本人地址
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressInput" } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+    delete:
+      security: [{ UserBearer: [] }]
+      summary: 删除本人地址并补选默认地址
+      responses: { "204": { description: 已删除 } }
+  /addresses/{id}/default:
+    put:
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 事务设置默认地址
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /checkout/preview:
+    post:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      summary: 服务端重算结算预览
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CheckoutInput" } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+  /orders:
+    post:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      summary: 事务创建订单
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody: { required: true, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/CheckoutInput" }, { type: object, required: [address_id], properties: { address_id: { $ref: "#/components/schemas/Id" }, remark: { type: string, maxLength: 255 } } }] } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+    get:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      summary: 我的订单分页
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [all, pending-payment, pending-shipment, pending-receipt, completed, cancelled, after-sale] } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: pageSize, in: query, schema: { type: integer, maximum: 100 } }
+      responses: { "200": { $ref: "#/components/responses/List" } }
+  /orders/counts:
+    get:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      summary: 我的订单状态数量
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /orders/{orderNo}:
+    get:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 本人订单完整详情
+      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/Error" } }
+  /orders/{orderNo}/cancel:
+    post:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 取消待付款订单并恢复库存和券
+      requestBody: { content: { application/json: { schema: { type: object, properties: { reason: { type: string } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+  /orders/{orderNo}/confirm-receipt:
+    post:
+      tags: [Orders]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 确认收货
+      responses: { "200": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+  /orders/{orderNo}/payments:
+    post:
+      tags: [Payments]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 创建或返回已有支付单
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [channel], properties: { channel: { type: string, enum: [wechat, alipay, apple] } } } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+  /payments/{paymentNo}:
+    get:
+      tags: [Payments]
+      security: [{ UserBearer: [] }]
+      parameters: [{ name: paymentNo, in: path, required: true, schema: { type: string } }]
+      summary: 查询本人支付单
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /payments/callback/{channel}:
+    post:
+      tags: [Payments]
+      summary: 支付渠道 HMAC 回调
+      parameters:
+        - { name: channel, in: path, required: true, schema: { type: string, enum: [wechat, alipay, apple] } }
+        - { name: x-signature, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [payment_no, trade_no, status], properties: { payment_no: { type: string }, trade_no: { type: string }, status: { type: string, enum: [paid, failed] }, paid_at: { type: string, format: date-time } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
+  /orders/{orderNo}/refunds:
+    post:
+      tags: [Payments]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }, { $ref: "#/components/parameters/IdempotencyKey" }]
+      summary: 发起退款
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [amount], properties: { amount: { type: string, pattern: '^\d+(\.\d{1,2})?$' }, reason: { type: string } } } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+    get:
+      tags: [Payments]
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 本人订单退款记录
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /refunds/callback/{channel}:
+    post:
+      tags: [Payments]
+      summary: 退款渠道 HMAC 回调
+      parameters:
+        - { name: channel, in: path, required: true, schema: { type: string, enum: [wechat, alipay, apple] } }
+        - { name: x-signature, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [refund_no, status], properties: { refund_no: { type: string }, status: { type: string, enum: [processed, failed] } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /coupons/available:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 当前可领取优惠券
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /coupons/{id}/claim:
+    post:
+      security: [{ UserBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 事务幂等领券
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /scan/barcodes/{barcode}:
+    get:
+      parameters: [{ name: barcode, in: path, required: true, schema: { type: string } }]
+      summary: 本地与缓存条码查询
+      responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/Error" } }
+  /scan/products:
+    post:
+      security: [{ UserBearer: [] }]
+      summary: 提交待审扫码商品
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [barcode, name, price], properties: { barcode: { type: string }, name: { type: string }, price: { type: string }, category_id: { $ref: "#/components/schemas/Id" }, cover_image: { type: string, format: uri } } } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+  /scan/products/mine:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 我的扫码提交
+      responses: { "200": { $ref: "#/components/responses/List" } }
+  /uploads/images:
+    post:
+      security: [{ UserBearer: [] }]
+      summary: 上传不超过 5MB 的 JPEG、PNG 或 WebP
+      requestBody: { required: true, content: { multipart/form-data: { schema: { type: object, required: [image], properties: { image: { type: string, format: binary } } } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" }, "413": { $ref: "#/components/responses/Error" } }
+  /app/versions/latest:
+    get:
+      parameters: [{ name: platform, in: query, required: true, schema: { type: string, enum: [android, ios, pc] } }]
+      summary: 最新客户端版本
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /admin/products/{id}/stock-adjustments:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 事务调整商品或 SKU 库存
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [change_qty, reason], properties: { change_qty: { type: integer }, sku_id: { $ref: "#/components/schemas/Id" }, reason: { type: string }, biz_id: { type: string }, operator_id: { $ref: "#/components/schemas/Id" } } } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+  /admin/orders/{orderNo}/ship:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/OrderNo" }]
+      summary: 发货并流转为待收货
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [carrier, tracking_no], properties: { carrier: { type: string }, tracking_no: { type: string }, operator_id: { $ref: "#/components/schemas/Id" } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /admin/scan-products/{id}/approve:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 审核通过并创建正式商品
+      requestBody: { content: { application/json: { schema: { type: object, properties: { stock: { type: integer, minimum: 0 }, reviewer_id: { $ref: "#/components/schemas/Id" } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /admin/scan-products/{id}/reject:
+    post:
+      tags: [Admin]
+      security: [{ AdminBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: 拒绝扫码商品
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string }, reviewer_id: { $ref: "#/components/schemas/Id" } } } } } }
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /resources/{resource}:
+    get:
+      security: [{ AdminBearer: [] }]
+      summary: 管理端通用资源分页
+      parameters: [{ name: resource, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { $ref: "#/components/responses/List" } }
+    post:
+      security: [{ AdminBearer: [] }]
+      summary: 管理端新增资源
+      parameters: [{ name: resource, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
+components:
+  securitySchemes:
+    UserBearer: { type: http, scheme: bearer, description: 登录返回的 App 会话 Token }
+    AdminBearer: { type: http, scheme: bearer, description: 环境变量 API_TOKEN }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { $ref: "#/components/schemas/Id" } }
+    OrderNo: { name: orderNo, in: path, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 128 } }
+  schemas:
+    Id: { oneOf: [{ type: string, pattern: '^\d+$' }, { type: integer, minimum: 1 }] }
+    CartItemInput:
+      type: object
+      required: [product_id, qty]
+      properties:
+        product_id: { $ref: "#/components/schemas/Id" }
+        sku_id: { oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }] }
+        qty: { type: integer, minimum: 1, maximum: 999 }
+    AddressInput:
+      type: object
+      properties:
+        consignee: { type: string, maxLength: 32 }
+        phone: { type: string, pattern: '^1\d{10}$' }
+        province: { type: string }
+        city: { type: string }
+        district: { type: string }
+        detail: { type: string, maxLength: 255 }
+        tag: { type: [string, "null"] }
+        is_default: { type: boolean }
+    CheckoutInput:
+      type: object
+      description: cart_item_ids 与 item 必须二选一
+      properties:
+        cart_item_ids: { type: array, minItems: 1, items: { $ref: "#/components/schemas/Id" } }
+        item:
+          type: object
+          required: [product_id, qty]
+          properties:
+            product_id: { $ref: "#/components/schemas/Id" }
+            sku_id: { oneOf: [{ $ref: "#/components/schemas/Id" }, { type: "null" }] }
+            qty: { type: integer, minimum: 1 }
+        address_id: { $ref: "#/components/schemas/Id" }
+        user_coupon_id: { $ref: "#/components/schemas/Id" }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties: { code: { type: string }, message: { type: string }, details: {} }
+        requestId: { type: string }
+  responses:
+    Success:
+      description: 成功
+      content: { application/json: { schema: { type: object, properties: { data: {} } } } }
+    List:
+      description: 分页成功
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { type: array, items: {} }
+              meta: { type: object, properties: { page: { type: integer }, pageSize: { type: integer }, total: { type: integer } } }
+    Error:
+      description: 请求失败
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

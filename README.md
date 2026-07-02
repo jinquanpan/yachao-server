@@ -1,0 +1,115 @@
+# yachao-server
+
+山海灵感便利店后端服务。
+
+Node.js 20+、TypeScript、Express、MySQL 8 实现。数据库基础结构来自 `山海灵感便利店-后端表结构.xlsx`，领域接口依据 `API_IMPLEMENTATION_TASK.md`。
+
+## 能力范围
+
+- App 会话认证，与管理端 `API_TOKEN` 完全隔离
+- 首页、分类树、商品搜索/筛选、SKU 与规格详情
+- 用户作用域购物车、收藏和地址
+- 结算预览、服务端金额重算、幂等下单、库存与优惠券事务
+- 订单列表/详情/取消/收货、支付单、验签回调与退款
+- 优惠券领取、扫码录入、图片上传和版本检查
+- 管理端库存调整、发货、扫码审核
+- 28 张基础表的管理端通用资源接口
+
+会员积分和跨设备通知偏好没有对应数据表，因此未伪造接口数据。
+
+## 初始化
+
+```bash
+pnpm install
+mysql -u root -p < database/schema.sql
+mysql -u root -p < database/migrations/001_domain_support.sql
+copy .env.example .env
+pnpm dev
+```
+
+幂等下单和退款依赖 `idempotency_requests`，部署时不能遗漏 migration。
+
+生产环境必须设置强随机 `TOKEN_PEPPER` 和 `API_TOKEN`。还应限制 `CORS_ORIGIN`，并配置 HTTPS。
+
+## 身份认证
+
+App 用户登录后得到的 `session.token` 用于用户接口：
+
+```http
+Authorization: Bearer <App session token>
+```
+
+`/api/v1/resources/*` 与 `/api/v1/admin/*` 使用环境变量 `API_TOKEN`，不能使用 App Token。未配置管理 Token 时这些接口返回 `503`，不会匿名开放。
+
+当前手机号验证码仅为非生产开发桩，验证码由 `DEV_LOGIN_CODE` 配置。生产环境会明确返回 `SMS_PROVIDER_NOT_CONFIGURED`。OAuth 同理，仅在非生产环境且 `OAUTH_DEV_MODE=true` 时支持联调，正式上线前必须接入微信/Apple 服务端凭证验证。
+
+## 主要接口
+
+完整请求体、认证方式和错误响应见 [openapi.yaml](./openapi.yaml)。
+
+| 领域 | 接口 |
+|---|---|
+| 认证 | `/auth/phone/login`、`/auth/oauth/login`、`/auth/refresh`、`/auth/logout` |
+| 用户 | `/me`、`/me/coupons` |
+| 目录 | `/home`、`/categories`、`/products`、`/products/:id` |
+| 购物 | `/cart/*`、`/favorites/*`、`/addresses/*` |
+| 交易 | `/checkout/preview`、`/orders/*`、`/payments/*`、`/refunds/*` |
+| 其他 | `/coupons/*`、`/scan/*`、`/uploads/images`、`/app/versions/latest` |
+| 管理 | `/admin/*`、`/resources/*` |
+
+### 开发登录
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/phone/login \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"13800000000","code":"123456","platform":"pc"}'
+```
+
+会话 Token 在数据库中只保存加 Pepper 的 SHA-256 摘要，接口返回的原始 Token 只在登录/刷新时出现。
+
+### 创建订单
+
+```bash
+curl -X POST http://localhost:3000/api/v1/orders \
+  -H "Authorization: Bearer <session-token>" \
+  -H "Idempotency-Key: checkout-20260630-001" \
+  -H "Content-Type: application/json" \
+  -d '{"cart_item_ids":["1","2"],"address_id":"1","user_coupon_id":"3"}'
+```
+
+服务端会在一个事务内锁定商品/SKU、地址和优惠券，重算金额，扣减库存，写订单快照与状态流水，使用优惠券并删除对应购物车项。重复的幂等键和相同请求会返回首次创建的订单；同一键用于不同请求返回 `409`。
+
+SKU 存在时以 `product_skus.stock` 为库存权威来源；无 SKU 时使用 `products.stock`。不会同时扣减两处库存。
+
+### 支付与退款回调
+
+回调请求使用原始 JSON 请求体计算 HMAC-SHA256：
+
+```text
+x-signature = hex(HMAC_SHA256(raw_request_body, callback_secret))
+```
+
+支付与退款分别使用 `PAYMENT_CALLBACK_SECRET`、`REFUND_CALLBACK_SECRET`。未配置密钥或签名不匹配时拒绝回调。客户端没有“直接标记支付成功”的接口。
+
+### 图片上传
+
+`POST /api/v1/uploads/images` 使用字段名 `image` 的 `multipart/form-data`。服务端校验文件头、声明 MIME 和 5MB 上限，随机生成文件名并返回持久 URL。默认存储在 `UPLOAD_DIR`；多实例生产部署应将这一适配层替换成对象存储。
+
+## 数据和响应约定
+
+- 字段保持 `snake_case`。
+- 金额返回两位小数字符串，例如 `"6.60"`。
+- MySQL `BIGINT` 返回字符串，避免 JavaScript 精度损失。
+- 单条响应为 `{ "data": ... }`，分页响应包含 `meta`。
+- 错误为 `{ "error": { "code", "message", "details" }, "requestId" }`。
+- 所有当前用户资源都从会话取得 `user_id`，忽略且不接受客户端伪造的用户 ID。
+
+## 验证
+
+```bash
+pnpm run typecheck
+pnpm test
+pnpm run build
+```
+
+数据库集成测试需要单独的 MySQL 测试实例；不要对生产库执行测试数据初始化。
