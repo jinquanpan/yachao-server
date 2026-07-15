@@ -1,4 +1,4 @@
-USE `shanhai_store`;
+USE `yacao_store`;
 
 CREATE TABLE `idempotency_requests` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,

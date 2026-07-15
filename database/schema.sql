@@ -1,7 +1,7 @@
-CREATE DATABASE IF NOT EXISTS `shanhai_store`
+CREATE DATABASE IF NOT EXISTS `yacao_store`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_0900_ai_ci;
-USE `shanhai_store`;
+USE `yacao_store`;
 
 CREATE TABLE `users` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

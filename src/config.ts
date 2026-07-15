@@ -9,7 +9,7 @@ const envSchema = z.object({
   DB_PORT: z.coerce.number().int().min(1).max(65535).default(3306),
   DB_USER: z.string().min(1).default("root"),
   DB_PASSWORD: z.string().default(""),
-  DB_NAME: z.string().min(1).default("shanhai_store"),
+  DB_NAME: z.string().min(1).default("yacao_store"),
   DB_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(100).default(10),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   API_TOKEN: z.string().optional().transform((value) => value || undefined),
