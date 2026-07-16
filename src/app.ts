@@ -20,11 +20,16 @@ import { scanRouter, uploadsRouter } from "./scan/router.js";
 import { appRouter } from "./system/router.js";
 import { meRouter } from "./users/router.js";
 
+function corsOrigin() {
+  if (config.CORS_ORIGIN.trim() === "*") return "*";
+  return config.CORS_ORIGIN.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
   app.use(helmet());
-  app.use(cors({ origin: config.CORS_ORIGIN.split(",").map((item) => item.trim()) }));
+  app.use(cors({ origin: corsOrigin() }));
   app.use(express.json({ limit: "1mb", verify: (req, _res, buffer) => { (req as express.Request).rawBody = Buffer.from(buffer); } }));
   app.use(requestContext);
   app.use("/uploads", express.static(path.resolve(config.UPLOAD_DIR), { fallthrough: false, maxAge: "7d" }));

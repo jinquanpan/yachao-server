@@ -11,7 +11,7 @@ const envSchema = z.object({
   DB_PASSWORD: z.string().default(""),
   DB_NAME: z.string().min(1).default("yacao_store"),
   DB_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(100).default(10),
-  CORS_ORIGIN: z.string().default("http://localhost:5173"),
+  CORS_ORIGIN: z.string().default("*"),
   API_TOKEN: z.string().optional().transform((value) => value || undefined),
   TOKEN_PEPPER: z.string().default("change-this-in-production"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
