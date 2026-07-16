@@ -14,7 +14,8 @@ import { bearerToken, issueSession } from "./service.js";
 const router = Router();
 const loginMetadata = z.object({
   device: z.string().trim().max(64).optional(),
-  platform: z.enum(["android", "ios", "pc"]).optional()
+  platform: z.enum(["android", "ios", "pc"]).optional(),
+  login_scope: z.enum(["app", "admin", "cashier"]).default("app")
 });
 
 const phoneLoginSchema = loginMetadata.extend({
@@ -51,7 +52,7 @@ const oauthLoginSchema = loginMetadata.extend({
 });
 
 function publicUser(row: DbRow) {
-  return { id: String(row.id), phone: row.phone, username: row.username, nickname: row.nickname, avatar_url: row.avatar_url, platform: row.platform };
+  return { id: String(row.id), phone: row.phone, username: row.username, nickname: row.nickname, avatar_url: row.avatar_url, platform: row.platform, role: row.role === "super_admin" ? "super_admin" : "user" };
 }
 
 function verifyPhoneCode(code: string) {
@@ -59,8 +60,9 @@ function verifyPhoneCode(code: string) {
   if (code !== config.DEV_LOGIN_CODE) throw new AppError(401, "INVALID_VERIFICATION_CODE", "验证码错误");
 }
 
-async function issueUserSession(connection: Parameters<typeof issueSession>[0], user: DbRow, metadata: { device?: string; platform?: string }, ip?: string) {
+async function issueUserSession(connection: Parameters<typeof issueSession>[0], user: DbRow, metadata: { device?: string; platform?: string; login_scope: "app" | "admin" | "cashier" }, ip?: string) {
   if (Number(user.status) !== 1) throw new AppError(403, "USER_DISABLED", "用户已被禁用");
+  if (metadata.login_scope !== "app" && user.role !== "super_admin") throw new AppError(403, "SUPER_ADMIN_REQUIRED", "普通用户只能登录 App");
   await connection.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = ?, platform = ? WHERE id = ?", [ip ?? null, metadata.platform ?? user.platform ?? null, user.id]);
   return { user: publicUser(user), session: await issueSession(connection, String(user.id), { ...metadata, ip }) };
 }
@@ -153,9 +155,8 @@ router.post("/oauth/login", async (req, res) => {
     }
     const [users] = await connection.query<DbRow[]>("SELECT * FROM users WHERE id = ?", [userId]);
     const user = users[0];
-    if (!user || Number(user.status) !== 1) throw new AppError(403, "USER_DISABLED", "用户不可用");
-    await connection.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = ?, platform = ? WHERE id = ?", [req.ip ?? null, input.platform ?? user.platform ?? null, userId]);
-    return { user: publicUser(user), session: await issueSession(connection, userId, { device: input.device, platform: input.platform, ip: req.ip }) };
+    if (!user) throw new AppError(403, "USER_DISABLED", "用户不可用");
+    return issueUserSession(connection, user, input, req.ip);
   });
   res.json({ data: result });
 });

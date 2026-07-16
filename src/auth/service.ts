@@ -19,12 +19,12 @@ export async function issueSession(connection: PoolConnection, userId: string, m
   return { token, expires_at: expiresAt.toISOString() };
 }
 
-export async function findActiveSession(rawToken: string): Promise<{ id: string; user_id: string; token_hash: string } | null> {
+export async function findActiveSession(rawToken: string): Promise<{ id: string; user_id: string; token_hash: string; role: "user" | "super_admin" } | null> {
   if (!rawToken) return null;
   const { db } = await import("../db.js");
   const hash = tokenHash(rawToken);
   const [rows] = await db.query<DbRow[]>(
-    `SELECT s.id, s.user_id
+    `SELECT s.id, s.user_id, u.role
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token = ? AND s.expire_at > CURRENT_TIMESTAMP AND u.status = 1
@@ -32,7 +32,7 @@ export async function findActiveSession(rawToken: string): Promise<{ id: string;
     [hash]
   );
   const row = rows[0];
-  return row ? { id: String(row.id), user_id: String(row.user_id), token_hash: hash } : null;
+  return row ? { id: String(row.id), user_id: String(row.user_id), token_hash: hash, role: row.role === "super_admin" ? "super_admin" : "user" } : null;
 }
 
 export function bearerToken(authorization: string | undefined): string {

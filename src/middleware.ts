@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { config } from "./config.js";
+import { findActiveSession } from "./auth/service.js";
 import { AppError } from "./errors.js";
 
 export const requestContext: RequestHandler = (req, res, next) => {
@@ -9,15 +10,22 @@ export const requestContext: RequestHandler = (req, res, next) => {
   next();
 };
 
-export const authenticate: RequestHandler = (req, _res, next) => {
-  if (!config.API_TOKEN) return next(new AppError(503, "ADMIN_TOKEN_NOT_CONFIGURED", "管理端 API_TOKEN 尚未配置"));
+export const authenticate: RequestHandler = async (req, _res, next) => {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
-  const actual = Buffer.from(token);
-  const expected = Buffer.from(config.API_TOKEN);
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
-    return next(new AppError(401, "UNAUTHORIZED", "未授权访问"));
+  if (config.API_TOKEN) {
+    const actual = Buffer.from(token);
+    const expected = Buffer.from(config.API_TOKEN);
+    if (actual.length === expected.length && timingSafeEqual(actual, expected)) return next();
   }
-  next();
+  try {
+    const session = await findActiveSession(token);
+    if (!session) throw new AppError(401, "UNAUTHORIZED", "未授权访问");
+    if (session.role !== "super_admin") throw new AppError(403, "SUPER_ADMIN_REQUIRED", "仅超级用户可访问管理或收银平台");
+    req.user = { id: session.user_id, session_id: session.id, token_hash: session.token_hash, role: session.role };
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const notFound: RequestHandler = (_req, _res, next) => {

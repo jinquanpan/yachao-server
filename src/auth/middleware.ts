@@ -6,7 +6,7 @@ export const userAuth: RequestHandler = async (req, _res, next) => {
   try {
     const session = await findActiveSession(bearerToken(req.headers.authorization));
     if (!session) throw new AppError(401, "SESSION_EXPIRED", "会话已失效，请重新登录");
-    req.user = { id: session.user_id, session_id: session.id, token_hash: session.token_hash };
+    req.user = { id: session.user_id, session_id: session.id, token_hash: session.token_hash, role: session.role };
     next();
   } catch (error) {
     next(error);
@@ -18,7 +18,7 @@ export const optionalUserAuth: RequestHandler = async (req, _res, next) => {
   if (!match?.[1]) return next();
   try {
     const session = await findActiveSession(match[1]);
-    if (session) req.user = { id: session.user_id, session_id: session.id, token_hash: session.token_hash };
+    if (session) req.user = { id: session.user_id, session_id: session.id, token_hash: session.token_hash, role: session.role };
     next();
   } catch (error) {
     next(error);

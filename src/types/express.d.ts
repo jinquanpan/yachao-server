@@ -7,6 +7,7 @@ declare global {
         id: string;
         session_id: string;
         token_hash: string;
+        role: "user" | "super_admin";
       };
     }
   }

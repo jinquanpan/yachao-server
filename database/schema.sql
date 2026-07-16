@@ -8,6 +8,7 @@ CREATE TABLE `users` (
   `phone` VARCHAR(20) NOT NULL COMMENT '手机号',
   `username` VARCHAR(64) NULL COMMENT '登录账号',
   `password_hash` VARCHAR(255) NULL COMMENT '密码哈希（scrypt）',
+  `role` VARCHAR(16) NOT NULL DEFAULT 'user' COMMENT '用户角色:user/super_admin',
   `nickname` VARCHAR(64) NULL COMMENT '昵称',
   `avatar_url` VARCHAR(255) NULL COMMENT '头像URL',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0禁用1正常',
@@ -20,14 +21,16 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_phone` (`phone`),
   UNIQUE KEY `uk_users_username` (`username`),
+  KEY `idx_users_role` (`role`),
   KEY `idx_users_status` (`status`)
 ) ENGINE=InnoDB COMMENT='用户主表';
 
-INSERT INTO `users` (`phone`, `username`, `password_hash`, `nickname`, `avatar_url`, `status`, `platform`)
-VALUES ('13005683936', '13005683936', 'scrypt$hSERPHSluOYIWXr-KoTC5w$I5blRK15kWwIqZXcE90j_qJoE-zTpIcFzVVaSYo4_rs7Q8AF9VdFEwQE3BWV6iWA5HNbbBFLGpM_9DZvOatqGg', '帅哥', 'https://api.dicebear.com/7.x/thumbs/svg?seed=13005683936', 1, 'pc')
+INSERT INTO `users` (`phone`, `username`, `password_hash`, `role`, `nickname`, `avatar_url`, `status`, `platform`)
+VALUES ('13005683936', '13005683936', 'scrypt$hSERPHSluOYIWXr-KoTC5w$I5blRK15kWwIqZXcE90j_qJoE-zTpIcFzVVaSYo4_rs7Q8AF9VdFEwQE3BWV6iWA5HNbbBFLGpM_9DZvOatqGg', 'super_admin', '帅哥', 'https://api.dicebear.com/7.x/thumbs/svg?seed=13005683936', 1, 'pc')
 ON DUPLICATE KEY UPDATE
   `username` = VALUES(`username`),
   `password_hash` = IFNULL(`password_hash`, VALUES(`password_hash`)),
+  `role` = VALUES(`role`),
   `nickname` = VALUES(`nickname`),
   `avatar_url` = VALUES(`avatar_url`),
   `status` = VALUES(`status`),

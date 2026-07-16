@@ -33,6 +33,7 @@ paths:
                 code: { type: string }
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
+                login_scope: { type: string, enum: [app, admin, cashier], default: app }
       responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
   /auth/oauth/login:
     post:
@@ -52,6 +53,7 @@ paths:
                 phone: { type: string, description: 首次登录时必填 }
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
+                login_scope: { type: string, enum: [app, admin, cashier], default: app }
       responses: { "200": { $ref: "#/components/responses/Success" }, "503": { $ref: "#/components/responses/Error" } }
   /auth/register:
     post:
@@ -89,6 +91,7 @@ paths:
                 password: { type: string, format: password }
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
+                login_scope: { type: string, enum: [app, admin, cashier], default: app }
       responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
   /auth/password/set:
     post:
@@ -115,6 +118,7 @@ paths:
                 phone_code: { type: string, description: 首次绑定手机号时必填 }
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
+                login_scope: { type: string, enum: [app, admin, cashier], default: app }
       responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/Error" }, "503": { $ref: "#/components/responses/Error" } }
   /auth/refresh:
     post:
@@ -147,6 +151,11 @@ paths:
       security: [{ UserBearer: [] }]
       summary: 我的优惠券
       parameters: [{ name: status, in: query, schema: { type: string, enum: [unused, used, expired] } }]
+      responses: { "200": { $ref: "#/components/responses/Success" } }
+  /me/access:
+    get:
+      security: [{ UserBearer: [] }]
+      summary: 当前用户角色及允许登录的平台
       responses: { "200": { $ref: "#/components/responses/Success" } }
   /home:
     get:
@@ -396,6 +405,23 @@ paths:
       parameters: [{ name: platform, in: query, required: true, schema: { type: string, enum: [android, ios, pc] } }]
       summary: 最新客户端版本
       responses: { "200": { $ref: "#/components/responses/Success" } }
+  /app/versions/publish:
+    post:
+      summary: 发布当前客户端版本
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, version, download_url]
+              properties:
+                platform: { type: string, enum: [android, ios, pc] }
+                version: { type: string, example: "1.0.1" }
+                download_url: { type: string, format: uri }
+                force_update: { type: boolean, default: false }
+                release_notes: { type: [string, "null"] }
+      responses: { "201": { $ref: "#/components/responses/Success" } }
   /admin/products/{id}/stock-adjustments:
     post:
       tags: [Admin]
@@ -443,7 +469,7 @@ paths:
 components:
   securitySchemes:
     UserBearer: { type: http, scheme: bearer, description: 登录返回的 App 会话 Token }
-    AdminBearer: { type: http, scheme: bearer, description: 环境变量 API_TOKEN }
+    AdminBearer: { type: http, scheme: bearer, description: 环境变量 API_TOKEN 或超级用户会话 Token }
   parameters:
     Id: { name: id, in: path, required: true, schema: { $ref: "#/components/schemas/Id" } }
     OrderNo: { name: orderNo, in: path, required: true, schema: { type: string } }

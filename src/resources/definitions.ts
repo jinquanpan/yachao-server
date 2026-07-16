@@ -36,7 +36,7 @@ function resource(
 }
 
 export const resources: Record<string, ResourceDefinition> = {
-  users: resource("users", [...b(["id"]), ...s(["phone", "username", "nickname", "avatar_url", "last_login_ip", "device_id", "platform"]), ...i(["status"]), ...dt(["last_login_at", "created_at", "updated_at"])], ["phone"]),
+  users: resource("users", [...b(["id"]), ...s(["phone", "username", "nickname", "avatar_url", "last_login_ip", "device_id", "platform", "role"]), ...i(["status"]), ...dt(["last_login_at", "created_at", "updated_at"])], ["phone"]),
   user_auths: resource("user_auths", [...b(["id", "user_id"]), ...s(["identity_type", "identifier", "credential"]), ...dt(["created_at", "updated_at"])], ["user_id", "identity_type", "identifier"]),
   user_sessions: resource("user_sessions", [...b(["id", "user_id"]), ...s(["token", "device", "platform", "ip"]), ...dt(["expire_at", "created_at"])], ["user_id", "token", "expire_at"]),
   coupons: resource("coupons", [...b(["id"]), ...s(["name", "type"]), ...d(["amount", "min_spend", "discount"]), ...dt(["valid_from", "valid_to", "created_at", "updated_at"]), ...i(["total", "issued"])], ["name", "type", "valid_from", "valid_to", "total"]),

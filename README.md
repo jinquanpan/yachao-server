@@ -27,7 +27,7 @@ copy .env.example .env
 pnpm dev
 ```
 
-新建数据库只需执行上述 `schema.sql` 和 `001`。已有数据库升级时，额外执行 `mysql -u root -p < database/migrations/002_password_and_wechat_login.sql` 及 `mysql -u root -p < database/migrations/003_seed_default_user_password.sql`；不要把 `002` 再用于刚用新版 `schema.sql` 创建的库。
+新建数据库只需执行上述 `schema.sql` 和 `001`。已有数据库升级时，额外执行 `mysql -u root -p < database/migrations/002_password_and_wechat_login.sql`、`003_seed_default_user_password.sql` 和 `004_user_roles.sql`；不要把 `002` 再用于刚用新版 `schema.sql` 创建的库。
 
 幂等下单和退款依赖 `idempotency_requests`，部署时不能遗漏 migration。
 
@@ -46,6 +46,14 @@ Authorization: Bearer <App session token>
 支持账号密码、手机号验证码和微信小程序登录。密码使用带随机盐的 scrypt 哈希存储，绝不保存明文。`POST /auth/register` 在注册时校验手机号验证码，`POST /auth/password/set` 使用手机号验证码设置或重置密码。
 
 当前手机号验证码仅为非生产开发桩，验证码由 `DEV_LOGIN_CODE` 配置。生产环境会明确返回 `SMS_PROVIDER_NOT_CONFIGURED`，接入短信服务商后需替换该开发桩。微信小程序生产登录需配置 `WX_APP_ID` 与 `WX_APP_SECRET`，服务端会用前端 `wx.login()` 获得的 `code` 调用微信 `jscode2session` 校验；开发联调可设置 `OAUTH_DEV_MODE=true`，此时 `code` 仅用作模拟微信用户标识。
+
+### 客户端版本发布
+
+客户端打包脚本可调用 `POST /api/v1/app/versions/publish` 写入当前版本。每次发布会替换同一平台的旧版本记录；客户端使用 `GET /api/v1/app/versions/latest?platform=android` 查询最新版本。该发布接口当前不校验 Token。
+
+### 用户角色
+
+用户角色为 `user`（普通用户）或 `super_admin`（超级用户）。普通用户仅能以 `login_scope=app` 登录；管理端和收银端登录时传 `login_scope=admin` 或 `login_scope=cashier`，仅超级用户允许登录并访问 `/admin/*`、`/resources/*`。内置账号 `13005683936` 在迁移后会设为超级用户。
 
 ## 主要接口
 
