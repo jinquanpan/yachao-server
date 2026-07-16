@@ -20,8 +20,13 @@ function resolveResource(req: Request): ResourceDefinition {
 
 function primaryKeyValues(definition: ResourceDefinition, rawId: string): string[] {
   const values = rawId.split(",").map(decodeURIComponent);
-  if (values.length !== definition.primaryKey.length || values.some((value) => !/^\d+$/.test(value))) {
-    const example = definition.primaryKey.length > 1 ? "1,2" : "1";
+  const valid = values.length === definition.primaryKey.length && values.every((value, index) => {
+    const field = definition.primaryKey[index]!;
+    const kind = definition.columns[field];
+    return kind === "integer" || kind === "bigint" ? /^\d+$/.test(value) : value.length > 0;
+  });
+  if (!valid) {
+    const example = definition.primaryKey.map((field) => (definition.columns[field] === "integer" || definition.columns[field] === "bigint") ? "1" : "key").join(",");
     throw new AppError(400, "INVALID_ID", `资源 ID 格式错误，例如: ${example}`);
   }
   return values;

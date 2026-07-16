@@ -69,6 +69,17 @@ CREATE TABLE `categories` (
   CONSTRAINT `fk_categories_parent` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB COMMENT='分类目录';
 
+INSERT INTO `categories` (`key`, `label`, `parent_id`, `icon`, `sort`)
+VALUES
+  ('tobacco', '香烟和零售', NULL, 'tobacco', 1),
+  ('daily', '日常用品', NULL, 'daily', 2),
+  ('water', '水', NULL, 'water', 3),
+  ('icecream', '雪糕', NULL, 'icecream', 4)
+ON DUPLICATE KEY UPDATE
+  `label` = VALUES(`label`),
+  `icon` = VALUES(`icon`),
+  `sort` = VALUES(`sort`);
+
 CREATE TABLE `tags` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `name` VARCHAR(32) NOT NULL COMMENT '标签名',
@@ -190,18 +201,24 @@ CREATE TABLE `scan_products` (
 ) ENGINE=InnoDB COMMENT='扫描录入商品';
 
 CREATE TABLE `scan_api_cache` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `source` VARCHAR(32) NOT NULL COMMENT '接口来源',
-  `cache_key` VARCHAR(128) NOT NULL COMMENT '缓存键',
-  `response_data` JSON NOT NULL COMMENT '接口返回数据',
-  `expire_at` DATETIME NOT NULL COMMENT '过期时间',
-  `hit_count` INT NOT NULL DEFAULT 0 COMMENT '命中次数',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次请求时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_scan_api_cache_source_key` (`source`, `cache_key`),
-  KEY `idx_scan_api_cache_expire` (`expire_at`)
+  `barcode` VARCHAR(64) NOT NULL COMMENT '条形码',
+  `response_body` LONGTEXT NOT NULL COMMENT '第三方接口原始响应字符串',
+  PRIMARY KEY (`barcode`)
 ) ENGINE=InnoDB COMMENT='第三方接口缓存';
+
+CREATE TABLE `gds_auth` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `account` VARCHAR(128) NOT NULL COMMENT 'GDS账号',
+  `access_token` VARCHAR(2048) NOT NULL COMMENT 'GDS访问令牌',
+  `current_role` VARCHAR(64) NOT NULL DEFAULT 'Mine' COMMENT 'GDS当前角色',
+  `expires_at` DATETIME NULL COMMENT '令牌过期时间',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0失效1有效',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gds_auth_account` (`account`),
+  KEY `idx_gds_auth_valid` (`account`, `status`, `expires_at`)
+) ENGINE=InnoDB COMMENT='GDS第三方商品查询认证信息';
 
 CREATE TABLE `stock_records` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

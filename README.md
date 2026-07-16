@@ -27,7 +27,7 @@ copy .env.example .env
 pnpm dev
 ```
 
-新建数据库只需执行上述 `schema.sql` 和 `001`。已有数据库升级时，额外执行 `mysql -u root -p < database/migrations/002_password_and_wechat_login.sql`、`003_seed_default_user_password.sql` 和 `004_user_roles.sql`；不要把 `002` 再用于刚用新版 `schema.sql` 创建的库。
+新建数据库只需执行上述 `schema.sql` 和 `001`。已有数据库升级时，依次执行 `002_password_and_wechat_login.sql`、`003_seed_default_user_password.sql`、`004_user_roles.sql`、`005_gds_auth.sql`、`006_simplify_scan_api_cache.sql` 和 `007_seed_categories.sql`；不要把 `002` 再用于刚用新版 `schema.sql` 创建的库。
 
 幂等下单和退款依赖 `idempotency_requests`，部署时不能遗漏 migration。
 
@@ -54,6 +54,10 @@ Authorization: Bearer <App session token>
 ### 用户角色
 
 用户角色为 `user`（普通用户）或 `super_admin`（超级用户）。普通用户仅能以 `login_scope=app` 登录；管理端和收银端登录时传 `login_scope=admin` 或 `login_scope=cashier`，仅超级用户允许登录并访问 `/admin/*`、`/resources/*`。内置账号 `13005683936` 在迁移后会设为超级用户。
+
+### GDS 商品查询
+
+所有用户可调用 `GET /api/v1/scan/gds/products/:barcode` 查询 13/14 位 GTIN 商品。接口先按条码查询 `scan_api_cache`；命中时直接返回缓存的 `response_body` 原始字符串，未命中时才从 MySQL `gds_auth` 表读取最新有效的 `access_token` 和 `current_role` 请求 GDS，并把原始响应字符串写入缓存。令牌不返回给客户端。
 
 ## 主要接口
 

@@ -48,7 +48,7 @@ export const resources: Record<string, ResourceDefinition> = {
   product_skus: resource("product_skus", [...b(["id", "product_id"]), ...s(["sku_code"]), ...d(["price"]), ...i(["stock"]), ...j(["attributes"]), ...dt(["created_at", "updated_at"])], ["product_id", "sku_code", "price"]),
   product_specs: resource("product_specs", [...i(["id"]), ...b(["product_id"]), ...s(["name"]), ...j(["values"])], ["product_id", "name", "values"]),
   scan_products: resource("scan_products", [...b(["id", "submitted_by", "reviewed_by"]), ...s(["barcode", "name", "cover_image", "status"]), ...d(["price"]), ...i(["category_id"]), ...dt(["created_at", "updated_at"])], ["barcode", "name", "price", "status", "submitted_by"]),
-  scan_api_cache: resource("scan_api_cache", [...b(["id"]), ...s(["source", "cache_key"]), ...j(["response_data"]), ...dt(["expire_at", "created_at", "updated_at"]), ...i(["hit_count"])], ["source", "cache_key", "response_data", "expire_at"]),
+  scan_api_cache: resource("scan_api_cache", [...s(["barcode"]), ...t(["response_body"])], ["barcode", "response_body"], { primaryKey: ["barcode"], generated: [] }),
   stock_records: resource("stock_records", [...b(["id", "product_id", "operator_id"]), ...s(["change_type", "biz_type", "biz_id"]), ...i(["change_qty", "balance"]), ...dt(["created_at"])], ["product_id", "change_type", "change_qty", "balance"]),
   cart_items: resource("cart_items", [...b(["id", "user_id", "product_id", "sku_id"]), ...i(["qty"]), ...bool(["selected"]), ...dt(["created_at", "updated_at"])], ["user_id", "product_id", "qty"]),
   favorites: resource("favorites", [...b(["id", "user_id", "product_id"]), ...dt(["created_at"])], ["user_id", "product_id"]),

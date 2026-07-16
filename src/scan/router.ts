@@ -12,6 +12,7 @@ import { config } from "../config.js";
 import { db } from "../db.js";
 import type { DbRow } from "../domain/types.js";
 import { AppError } from "../errors.js";
+import { queryGdsProduct } from "../gds/service.js";
 import { pagination, parse, requireUserId, routeParam } from "../lib/http.js";
 
 const scan = Router();
@@ -19,18 +20,29 @@ const uploads = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+scan.get("/gds/products/:barcode", async (req, res) => {
+  const barcode = parse(z.string().trim().regex(/^\d{13,14}$/), routeParam(req.params.barcode));
+  const [cached] = await db.query<DbRow[]>("SELECT barcode, response_body FROM scan_api_cache WHERE barcode = ? LIMIT 1", [barcode]);
+  if (cached[0]) return res.json({ data: { source: "cache", barcode, body: String(cached[0].response_body), cached: true } });
+  const result = await queryGdsProduct(barcode);
+  await db.execute(
+    "INSERT INTO scan_api_cache (barcode, response_body) VALUES (?, ?) ON DUPLICATE KEY UPDATE response_body = VALUES(response_body)",
+    [barcode, result.body]
+  );
+  res.json({ data: { source: "gds", ...result, cached: false } });
+});
+
 scan.get("/barcodes/:barcode", async (req, res) => {
   const barcode = parse(z.string().trim().regex(/^\d{6,64}$/), routeParam(req.params.barcode));
   const [[official], [submitted], [cached]] = await Promise.all([
     db.query<DbRow[]>("SELECT id, product_no AS barcode, name, price, category_id, cover_image FROM products WHERE product_no = ? AND status = 1 AND deleted_at IS NULL LIMIT 1", [barcode]),
     db.query<DbRow[]>("SELECT id, barcode, name, price, category_id, cover_image FROM scan_products WHERE barcode = ? AND status = 'approved' ORDER BY id DESC LIMIT 1", [barcode]),
-    db.query<DbRow[]>("SELECT id, source, response_data FROM scan_api_cache WHERE cache_key = ? AND expire_at > CURRENT_TIMESTAMP ORDER BY id DESC LIMIT 1", [barcode])
+    db.query<DbRow[]>("SELECT barcode, response_body FROM scan_api_cache WHERE barcode = ? LIMIT 1", [barcode])
   ]);
   if (official[0]) return res.json({ data: { ...official[0], id: String(official[0].id), price: money(official[0].price), source: "products" } });
   if (submitted[0]) return res.json({ data: { ...submitted[0], id: String(submitted[0].id), price: money(submitted[0].price), source: "scan_products" } });
   if (cached[0]) {
-    await db.execute("UPDATE scan_api_cache SET hit_count = hit_count + 1 WHERE id = ?", [cached[0].id]);
-    return res.json({ data: { ...(typeof cached[0].response_data === "string" ? JSON.parse(cached[0].response_data) : cached[0].response_data as object), source: cached[0].source, cached: true } });
+    return res.json({ data: { barcode, body: String(cached[0].response_body), source: "cache", cached: true } });
   }
   throw new AppError(404, "BARCODE_NOT_FOUND", "未找到条码信息，第三方条码服务尚未配置");
 });
