@@ -1,4 +1,5 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { config } from "../config.js";
 
 export function newToken(): string {
@@ -7,6 +8,29 @@ export function newToken(): string {
 
 export function tokenHash(token: string): string {
   return createHash("sha256").update(`${token}:${config.TOKEN_PEPPER}`).digest("hex");
+}
+
+const scryptAsync = promisify(scrypt);
+const PASSWORD_KEY_LENGTH = 64;
+
+/** Hash passwords with a per-password random salt. Never store a plaintext password. */
+export async function passwordHash(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("base64url");
+  const derived = await scryptAsync(password, salt, PASSWORD_KEY_LENGTH) as Buffer;
+  return `scrypt$${salt}$${derived.toString("base64url")}`;
+}
+
+export async function verifyPassword(password: string, encoded: string | null | undefined): Promise<boolean> {
+  if (!encoded) return false;
+  const [algorithm, salt, expected] = encoded.split("$");
+  if (algorithm !== "scrypt" || !salt || !expected) return false;
+  try {
+    const actual = await scryptAsync(password, salt, PASSWORD_KEY_LENGTH) as Buffer;
+    const expectedBuffer = Buffer.from(expected, "base64url");
+    return expectedBuffer.length === actual.length && timingSafeEqual(expectedBuffer, actual);
+  } catch {
+    return false;
+  }
 }
 
 function canonical(value: unknown): string {

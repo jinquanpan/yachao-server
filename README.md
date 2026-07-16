@@ -27,6 +27,8 @@ copy .env.example .env
 pnpm dev
 ```
 
+新建数据库只需执行上述 `schema.sql` 和 `001`。已有数据库升级时，额外执行 `mysql -u root -p < database/migrations/002_password_and_wechat_login.sql`；不要把 `002` 再用于刚用新版 `schema.sql` 创建的库。
+
 幂等下单和退款依赖 `idempotency_requests`，部署时不能遗漏 migration。
 
 生产环境必须设置强随机 `TOKEN_PEPPER` 和 `API_TOKEN`。还应限制 `CORS_ORIGIN`，并配置 HTTPS。
@@ -41,7 +43,9 @@ Authorization: Bearer <App session token>
 
 `/api/v1/resources/*` 与 `/api/v1/admin/*` 使用环境变量 `API_TOKEN`，不能使用 App Token。未配置管理 Token 时这些接口返回 `503`，不会匿名开放。
 
-当前手机号验证码仅为非生产开发桩，验证码由 `DEV_LOGIN_CODE` 配置。生产环境会明确返回 `SMS_PROVIDER_NOT_CONFIGURED`。OAuth 同理，仅在非生产环境且 `OAUTH_DEV_MODE=true` 时支持联调，正式上线前必须接入微信/Apple 服务端凭证验证。
+支持账号密码、手机号验证码和微信小程序登录。密码使用带随机盐的 scrypt 哈希存储，绝不保存明文。`POST /auth/register` 在注册时校验手机号验证码，`POST /auth/password/set` 可让已登录用户设置或修改密码。
+
+当前手机号验证码仅为非生产开发桩，验证码由 `DEV_LOGIN_CODE` 配置。生产环境会明确返回 `SMS_PROVIDER_NOT_CONFIGURED`，接入短信服务商后需替换该开发桩。微信小程序生产登录需配置 `WX_APP_ID` 与 `WX_APP_SECRET`，服务端会用前端 `wx.login()` 获得的 `code` 调用微信 `jscode2session` 校验；开发联调可设置 `OAUTH_DEV_MODE=true`，此时 `code` 仅用作模拟微信用户标识。
 
 ## 主要接口
 
@@ -49,7 +53,7 @@ Authorization: Bearer <App session token>
 
 | 领域 | 接口 |
 |---|---|
-| 认证 | `/auth/phone/login`、`/auth/oauth/login`、`/auth/refresh`、`/auth/logout` |
+| 认证 | `/auth/register`、`/auth/password/login`、`/auth/password/set`、`/auth/phone/login`、`/auth/wechat/login`、`/auth/refresh`、`/auth/logout` |
 | 用户 | `/me`、`/me/coupons` |
 | 目录 | `/home`、`/categories`、`/products`、`/products/:id` |
 | 购物 | `/cart/*`、`/favorites/*`、`/addresses/*` |

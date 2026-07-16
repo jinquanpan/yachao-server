@@ -6,6 +6,8 @@ USE `yacao_store`;
 CREATE TABLE `users` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `phone` VARCHAR(20) NOT NULL COMMENT '手机号',
+  `username` VARCHAR(64) NULL COMMENT '登录账号',
+  `password_hash` VARCHAR(255) NULL COMMENT '密码哈希（scrypt）',
   `nickname` VARCHAR(64) NULL COMMENT '昵称',
   `avatar_url` VARCHAR(255) NULL COMMENT '头像URL',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0禁用1正常',
@@ -17,8 +19,18 @@ CREATE TABLE `users` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_phone` (`phone`),
+  UNIQUE KEY `uk_users_username` (`username`),
   KEY `idx_users_status` (`status`)
 ) ENGINE=InnoDB COMMENT='用户主表';
+
+INSERT INTO `users` (`phone`, `username`, `nickname`, `avatar_url`, `status`, `platform`)
+VALUES ('13005683936', '13005683936', '帅哥', 'https://api.dicebear.com/7.x/thumbs/svg?seed=13005683936', 1, 'pc')
+ON DUPLICATE KEY UPDATE
+  `username` = VALUES(`username`),
+  `nickname` = VALUES(`nickname`),
+  `avatar_url` = VALUES(`avatar_url`),
+  `status` = VALUES(`status`),
+  `platform` = VALUES(`platform`);
 
 CREATE TABLE `coupons` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

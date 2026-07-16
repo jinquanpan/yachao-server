@@ -53,6 +53,70 @@ paths:
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
       responses: { "200": { $ref: "#/components/responses/Success" }, "503": { $ref: "#/components/responses/Error" } }
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: 手机验证码注册账号密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code, password]
+              properties:
+                phone: { type: string, pattern: '^1\\d{10}$' }
+                code: { type: string, description: 手机验证码；开发环境为 DEV_LOGIN_CODE }
+                account: { type: string, description: 可选；未传时使用手机号作为账号 }
+                password: { type: string, minLength: 8, format: password }
+                nickname: { type: string }
+                device: { type: string }
+                platform: { type: string, enum: [android, ios, pc] }
+      responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } }
+  /auth/password/login:
+    post:
+      tags: [Auth]
+      summary: 账号密码登录（账号可为 username 或手机号）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account, password]
+              properties:
+                account: { type: string }
+                password: { type: string, format: password }
+                device: { type: string }
+                platform: { type: string, enum: [android, ios, pc] }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
+  /auth/password/set:
+    post:
+      tags: [Auth]
+      security: [{ UserBearer: [] }]
+      summary: 为当前已登录用户设置或修改密码
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [password], properties: { password: { type: string, minLength: 8, format: password } } } } }
+      responses: { "204": { description: 密码已更新 } }
+  /auth/wechat/login:
+    post:
+      tags: [Auth]
+      summary: 微信小程序登录；首次登录需用短信验证码绑定手机号
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: wx.login 返回的临时 code }
+                phone: { type: string, description: 首次登录时必填 }
+                phone_code: { type: string, description: 首次绑定手机号时必填 }
+                device: { type: string }
+                platform: { type: string, enum: [android, ios, pc] }
+      responses: { "200": { $ref: "#/components/responses/Success" }, "400": { $ref: "#/components/responses/Error" }, "503": { $ref: "#/components/responses/Error" } }
   /auth/refresh:
     post:
       tags: [Auth]
