@@ -22,7 +22,7 @@ const phoneLoginSchema = loginMetadata.extend({
   code: z.string().min(4).max(12)
 });
 
-const passwordSchema = z.string().min(8, "密码至少 8 位").max(128, "密码不能超过 128 位");
+const passwordSchema = z.string().min(6, "密码至少 6 位").max(128, "密码不能超过 128 位");
 const accountSchema = z.string().trim().min(3).max(64).regex(/^[a-zA-Z0-9_.-]+$/, "账号仅支持字母、数字、点、下划线和短横线");
 const passwordLoginSchema = loginMetadata.extend({ account: accountSchema, password: passwordSchema });
 const registerSchema = loginMetadata.extend({
@@ -32,7 +32,11 @@ const registerSchema = loginMetadata.extend({
   password: passwordSchema,
   nickname: z.string().trim().min(1).max(64).optional()
 });
-const passwordSetSchema = z.object({ password: passwordSchema });
+const passwordSetSchema = z.object({
+  phone: z.string().regex(/^1\d{10}$/, "手机号格式错误"),
+  code: z.string().min(4).max(12),
+  password: passwordSchema
+});
 const wechatLoginSchema = loginMetadata.extend({
   code: z.string().trim().min(1).max(512),
   phone: z.string().regex(/^1\d{10}$/).optional(),
@@ -114,9 +118,11 @@ router.post("/password/login", async (req, res) => {
   res.json({ data: result });
 });
 
-router.post("/password/set", userAuth, async (req, res) => {
+router.post("/password/set", async (req, res) => {
   const input = parse(passwordSetSchema, req.body);
-  await db.execute("UPDATE users SET password_hash = ? WHERE id = ?", [await passwordHash(input.password), requireUserId(req)]);
+  verifyPhoneCode(input.code);
+  const [result] = await db.execute<ResultSetHeader>("UPDATE users SET password_hash = ? WHERE phone = ? AND status = 1", [await passwordHash(input.password), input.phone]);
+  if (result.affectedRows !== 1) throw new AppError(404, "USER_NOT_FOUND", "用户不存在或已被禁用");
   res.status(204).send();
 });
 

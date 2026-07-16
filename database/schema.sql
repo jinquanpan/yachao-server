@@ -23,10 +23,11 @@ CREATE TABLE `users` (
   KEY `idx_users_status` (`status`)
 ) ENGINE=InnoDB COMMENT='用户主表';
 
-INSERT INTO `users` (`phone`, `username`, `nickname`, `avatar_url`, `status`, `platform`)
-VALUES ('13005683936', '13005683936', '帅哥', 'https://api.dicebear.com/7.x/thumbs/svg?seed=13005683936', 1, 'pc')
+INSERT INTO `users` (`phone`, `username`, `password_hash`, `nickname`, `avatar_url`, `status`, `platform`)
+VALUES ('13005683936', '13005683936', 'scrypt$hSERPHSluOYIWXr-KoTC5w$I5blRK15kWwIqZXcE90j_qJoE-zTpIcFzVVaSYo4_rs7Q8AF9VdFEwQE3BWV6iWA5HNbbBFLGpM_9DZvOatqGg', '帅哥', 'https://api.dicebear.com/7.x/thumbs/svg?seed=13005683936', 1, 'pc')
 ON DUPLICATE KEY UPDATE
   `username` = VALUES(`username`),
+  `password_hash` = IFNULL(`password_hash`, VALUES(`password_hash`)),
   `nickname` = VALUES(`nickname`),
   `avatar_url` = VALUES(`avatar_url`),
   `status` = VALUES(`status`),

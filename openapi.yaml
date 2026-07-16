@@ -93,11 +93,10 @@ paths:
   /auth/password/set:
     post:
       tags: [Auth]
-      security: [{ UserBearer: [] }]
-      summary: 为当前已登录用户设置或修改密码
+      summary: 通过手机号验证码设置或重置密码
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [password], properties: { password: { type: string, minLength: 8, format: password } } } } }
+        content: { application/json: { schema: { type: object, required: [phone, code, password], properties: { phone: { type: string, pattern: '^1\\d{10}$' }, code: { type: string }, password: { type: string, minLength: 6, format: password } } } } }
       responses: { "204": { description: 密码已更新 } }
   /auth/wechat/login:
     post:
