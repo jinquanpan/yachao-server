@@ -5,7 +5,7 @@ import { AppError } from "../errors.js";
 
 const GDS_API_URL = "https://bff.gds.org.cn/gds/searching-api/ProductService/ProductListByGTIN";
 
-function normalizeGtin(barcode: string): string {
+export function normalizeGtin(barcode: string): string {
   if (!/^\d+$/.test(barcode)) throw new AppError(400, "INVALID_BARCODE", "条形码只能包含数字");
   if (barcode.length === 13) return `0${barcode}`;
   if (barcode.length === 14) return barcode;

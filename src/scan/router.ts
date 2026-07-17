@@ -12,7 +12,7 @@ import { config } from "../config.js";
 import { db } from "../db.js";
 import type { DbRow } from "../domain/types.js";
 import { AppError } from "../errors.js";
-import { queryGdsProduct } from "../gds/service.js";
+import { normalizeGtin, queryGdsProduct } from "../gds/service.js";
 import { pagination, parse, requireUserId, routeParam } from "../lib/http.js";
 
 const scan = Router();
@@ -22,22 +22,31 @@ const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 scan.get("/gds/products/:barcode", async (req, res) => {
   const barcode = parse(z.string().trim().regex(/^\d{13,14}$/), routeParam(req.params.barcode));
-  const [cached] = await db.query<DbRow[]>("SELECT barcode, response_body FROM scan_api_cache WHERE barcode = ? LIMIT 1", [barcode]);
+  const gtin = normalizeGtin(barcode);
+  // New records use the canonical 14-digit GTIN. Keep the raw value as a fallback for existing cache rows.
+  const [cached] = await db.query<DbRow[]>(
+    "SELECT barcode, response_body FROM scan_api_cache WHERE barcode IN (?, ?) ORDER BY barcode = ? DESC LIMIT 1",
+    [gtin, barcode, gtin]
+  );
   if (cached[0]) return res.json({ data: { source: "cache", barcode, body: String(cached[0].response_body), cached: true } });
   const result = await queryGdsProduct(barcode);
   await db.execute(
     "INSERT INTO scan_api_cache (barcode, response_body) VALUES (?, ?) ON DUPLICATE KEY UPDATE response_body = VALUES(response_body)",
-    [barcode, result.body]
+    [result.gtin, result.body]
   );
   res.json({ data: { source: "gds", ...result, cached: false } });
 });
 
 scan.get("/barcodes/:barcode", async (req, res) => {
   const barcode = parse(z.string().trim().regex(/^\d{6,64}$/), routeParam(req.params.barcode));
+  const cachedBarcode = /^\d{13,14}$/.test(barcode) ? normalizeGtin(barcode) : barcode;
   const [[official], [submitted], [cached]] = await Promise.all([
     db.query<DbRow[]>("SELECT id, product_no AS barcode, name, price, category_id, cover_image FROM products WHERE product_no = ? AND status = 1 AND deleted_at IS NULL LIMIT 1", [barcode]),
     db.query<DbRow[]>("SELECT id, barcode, name, price, category_id, cover_image FROM scan_products WHERE barcode = ? AND status = 'approved' ORDER BY id DESC LIMIT 1", [barcode]),
-    db.query<DbRow[]>("SELECT barcode, response_body FROM scan_api_cache WHERE barcode = ? LIMIT 1", [barcode])
+    db.query<DbRow[]>(
+      "SELECT barcode, response_body FROM scan_api_cache WHERE barcode IN (?, ?) ORDER BY barcode = ? DESC LIMIT 1",
+      [cachedBarcode, barcode, cachedBarcode]
+    )
   ]);
   if (official[0]) return res.json({ data: { ...official[0], id: String(official[0].id), price: money(official[0].price), source: "products" } });
   if (submitted[0]) return res.json({ data: { ...submitted[0], id: String(submitted[0].id), price: money(submitted[0].price), source: "scan_products" } });
