@@ -17,6 +17,7 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   DEV_LOGIN_CODE: z.string().min(4).max(12).default("123456"),
   OAUTH_DEV_MODE: z.string().default("false").transform((value) => value === "true"),
+  GDS_DEBUG: z.string().default("false").transform((value) => value === "true"),
   WX_APP_ID: z.string().optional().transform((value) => value || undefined),
   WX_APP_SECRET: z.string().optional().transform((value) => value || undefined),
   PAYMENT_CALLBACK_SECRET: z.string().optional().transform((value) => value || undefined),

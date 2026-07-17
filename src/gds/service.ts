@@ -1,4 +1,5 @@
 import { db } from "../db.js";
+import { config } from "../config.js";
 import type { DbRow } from "../domain/types.js";
 import { AppError } from "../errors.js";
 
@@ -13,6 +14,16 @@ function normalizeGtin(barcode: string): string {
 
 async function responseBody(response: Response): Promise<string> {
   return response.text();
+}
+
+function maskedBearer(token: string): string {
+  const value = token.trim();
+  if (value.length <= 16) return "Bearer [REDACTED]";
+  return `Bearer ${value.slice(0, 8)}...${value.slice(-6)}`;
+}
+
+function debugGds(event: string, details: Record<string, unknown>): void {
+  if (config.GDS_DEBUG) console.info(`[gds] ${event}`, details);
 }
 
 /** Reads the latest valid token from MySQL on every call, then requests the GDS service. */
@@ -33,15 +44,29 @@ export async function queryGdsProduct(barcode: string): Promise<{ barcode: strin
   url.searchParams.set("PageSize", "30");
   url.searchParams.set("PageIndex", "1");
   url.searchParams.set("SearchItem", gtin);
+  const accessToken = String(auth.access_token).trim();
+  const currentRole = String(auth.current_role ?? "Mine");
+  const headers = { Authorization: `Bearer ${accessToken}`, currentRole, Accept: "application/json" };
+  debugGds("request", {
+    method: "GET",
+    url: url.toString(),
+    headers: { Authorization: maskedBearer(accessToken), currentRole, Accept: "application/json" },
+    body: null
+  });
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { Authorization: `Bearer ${String(auth.access_token).trim()}`, currentRole: String(auth.current_role ?? "Mine"), Accept: "application/json" },
+      headers,
       signal: AbortSignal.timeout(15_000)
     });
-  } catch {
+  } catch (error) {
+    debugGds("request_failed", {
+      url: url.toString(),
+      error: error instanceof Error ? { name: error.name, message: error.message, cause: String(error.cause ?? "") } : String(error)
+    });
     throw new AppError(502, "GDS_REQUEST_FAILED", "GDS 商品服务请求失败");
   }
+  debugGds("response", { url: url.toString(), status: response.status, statusText: response.statusText });
   const data = await responseBody(response);
   if (response.status === 401) throw new AppError(502, "GDS_TOKEN_EXPIRED", "GDS Access Token 已失效");
   if (response.status === 403) throw new AppError(502, "GDS_FORBIDDEN", "当前 GDS 账号没有查询权限");

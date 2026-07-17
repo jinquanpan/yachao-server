@@ -59,6 +59,59 @@ Authorization: Bearer <App session token>
 
 所有用户可调用 `GET /api/v1/scan/gds/products/:barcode` 查询 13/14 位 GTIN 商品。接口先按条码查询 `scan_api_cache`；命中时直接返回缓存的 `response_body` 原始字符串，未命中时才从 MySQL `gds_auth` 表读取最新有效的 `access_token` 和 `current_role` 请求 GDS，并把原始响应字符串写入缓存。令牌不返回给客户端。
 
+### 条形码请求示例
+
+扫码后优先调用本地条码查询接口，无需登录。条码只能由数字组成，长度为 6～64 位；接口依次查询正式商品、已审核的扫码商品和本地条码缓存。
+
+```bash
+curl "http://localhost:3000/api/v1/scan/barcodes/6901234567892"
+```
+
+若命中正式商品，响应示例：
+
+```json
+{
+  "data": {
+    "id": "12",
+    "barcode": "6901234567892",
+    "name": "矿泉水 550ml",
+    "price": "2.00",
+    "category_id": "3",
+    "cover_image": "https://example.com/products/water.png",
+    "source": "products"
+  }
+}
+```
+
+如果需要主动请求 GDS 第三方条码服务，使用 13 或 14 位 GTIN：
+
+```bash
+curl "http://localhost:3000/api/v1/scan/gds/products/6901234567892"
+```
+
+GDS Token 不会自动获取。获取新 Token 后，在 PowerShell 中通过环境变量写入或更新认证记录；脚本会从 JWT 中自动读取过期时间，也可用 `GDS_TOKEN_EXPIRES_AT` 覆盖。请勿将 Token 写入 `.env` 或提交至 Git。
+
+```powershell
+$env:GDS_ACCOUNT = '你的GDS账号'
+$env:GDS_ACCESS_TOKEN = '新获取的GDS Access Token'
+$env:GDS_CURRENT_ROLE = 'Mine'
+pnpm gds:auth:upsert
+```
+
+排查 GDS 请求失败时，可在服务端环境中设置 `GDS_DEBUG=true` 并重启服务。日志会输出完整请求 URL、方法、请求头（`Authorization` 已脱敏）及网络错误原因；该请求为 `GET`，没有请求体。
+
+首次查询成功时，`data.source` 为 `"gds"`，响应中的 `body` 是 GDS 返回的原始 JSON 字符串；后续命中缓存时，`source` 为 `"cache"`，并且 `cached` 为 `true`。未找到本地条码且没有可用缓存时，本地查询接口返回：
+
+```json
+{
+  "error": {
+    "code": "BARCODE_NOT_FOUND",
+    "message": "未找到条码信息，第三方条码服务尚未配置"
+  },
+  "requestId": "..."
+}
+```
+
 ## 主要接口
 
 完整请求体、认证方式和错误响应见 [openapi.yaml](./openapi.yaml)。
