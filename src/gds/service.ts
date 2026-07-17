@@ -5,6 +5,40 @@ import { AppError } from "../errors.js";
 
 const GDS_API_URL = "https://bff.gds.org.cn/gds/searching-api/ProductService/ProductListByGTIN";
 
+export type GdsProduct = { name: string | null; barcode: string; description: string | null };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function firstText(item: Record<string, unknown>, fields: string[]): string | null {
+  for (const field of fields) {
+    const value = item[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return null;
+}
+
+/** Extracts the public product fields from a GDS ProductListByGTIN response. */
+export function parseGdsProduct(body: string, fallbackBarcode: string): GdsProduct | null {
+  try {
+    const response = record(JSON.parse(body));
+    const data = record(response?.Data ?? response?.data);
+    const items = data?.Items ?? data?.items;
+    if (!Array.isArray(items) || !items.length) return null;
+    const item = record(items[0]);
+    if (!item) return null;
+    return {
+      name: firstText(item, ["ProductName", "productName", "Name", "name"]),
+      barcode: firstText(item, ["GTIN", "gtin", "Gtin", "Barcode", "barcode"]) ?? fallbackBarcode,
+      description: firstText(item, ["ProductDescription", "productDescription", "Description", "description", "TradeItemDescription", "tradeItemDescription"])
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeGtin(barcode: string): string {
   if (!/^\d+$/.test(barcode)) throw new AppError(400, "INVALID_BARCODE", "条形码只能包含数字");
   if (barcode.length === 13) return `0${barcode}`;

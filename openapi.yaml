@@ -424,7 +424,7 @@ paths:
       responses: { "201": { $ref: "#/components/responses/Success" } }
   /scan/gds/products/{barcode}:
     get:
-      summary: 通过 GDS 第三方服务查询 13/14 位条码商品
+      summary: 通过 GDS 第三方服务查询 13/14 位条码商品，仅返回名称、条码和描述
       parameters: [{ name: barcode, in: path, required: true, schema: { type: string, pattern: '^\\d{13,14}$' } }]
       responses: { "200": { $ref: "#/components/responses/Success" }, "502": { $ref: "#/components/responses/Error" }, "503": { $ref: "#/components/responses/Error" } }
   /admin/products/{id}/stock-adjustments:
