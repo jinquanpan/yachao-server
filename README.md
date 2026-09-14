@@ -57,7 +57,9 @@ Authorization: Bearer <App session token>
 
 ### GDS 商品查询
 
-所有用户可调用 `GET /api/v1/scan/gds/products/:barcode` 查询 13/14 位 GTIN 商品。13 位条码会先补齐前导 `0`，转换为 14 位 GTIN 后再请求 GDS；缓存也统一按该 14 位 GTIN 保存。接口先查 `scan_api_cache`；命中时从缓存读取原始响应，未命中时才从 MySQL `gds_auth` 表读取最新有效的 `access_token` 和 `current_role` 请求 GDS 并写入缓存。接口仅返回 `{ name, barcode, description }` 商品对象；GDS 没有匹配商品时返回 `data: null`。令牌和第三方原始响应均不返回给客户端。
+所有用户可调用 `GET /api/v1/scan/gds/products/:barcode` 查询 13/14 位 GTIN 商品。13 位条码会先补齐前导 `0`，转换为 14 位 GTIN 后再请求 GDS；缓存也统一按该 14 位 GTIN 保存。接口先查 `scan_api_cache`；命中时从缓存读取原始响应，未命中时才从 MySQL `gds_auth` 表读取最新有效的 `access_token` 和 `current_role` 请求 GDS 并写入缓存。接口以 `{ "data": { ... } }` 返回 `productFullName`、`brandcn`、`specification`、`gtin`、`firm_name`、`branch_name`、`gpcname`、`valid_date`、`picture_filename` 九个字段；GDS 没有匹配商品时返回 `{ "data": null }`。令牌和第三方原始响应均不返回给客户端。
+
+若 GDS 返回 `picture_filename` 相对路径，服务端会拼接 `https://oss.gds.org.cn` 下载图片到 `/data/static/goods/<gtin>.<后缀>`，并将返回的 `picture_filename` 替换为 `http://120.53.21.92:30990/goods/<gtin>.<后缀>`。对应目录与域名可通过 `GDS_GOODS_DIR`、`GDS_GOODS_PUBLIC_BASE_URL` 配置。
 
 ### 条形码请求示例
 

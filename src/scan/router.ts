@@ -12,7 +12,7 @@ import { config } from "../config.js";
 import { db } from "../db.js";
 import type { DbRow } from "../domain/types.js";
 import { AppError } from "../errors.js";
-import { normalizeGtin, parseGdsProduct, queryGdsProduct } from "../gds/service.js";
+import { localizeGdsPicture, normalizeGtin, parseGdsProduct, queryGdsProduct } from "../gds/service.js";
 import { pagination, parse, requireUserId, routeParam } from "../lib/http.js";
 
 const scan = Router();
@@ -28,13 +28,17 @@ scan.get("/gds/products/:barcode", async (req, res) => {
     "SELECT barcode, response_body FROM scan_api_cache WHERE barcode IN (?, ?) ORDER BY barcode = ? DESC LIMIT 1",
     [gtin, barcode, gtin]
   );
-  if (cached[0]) return res.json({ data: parseGdsProduct(String(cached[0].response_body), gtin) });
+  if (cached[0]) {
+    const product = parseGdsProduct(String(cached[0].response_body), gtin);
+    return res.json({ data: product ? await localizeGdsPicture(product) : null });
+  }
   const result = await queryGdsProduct(barcode);
   await db.execute(
     "INSERT INTO scan_api_cache (barcode, response_body) VALUES (?, ?) ON DUPLICATE KEY UPDATE response_body = VALUES(response_body)",
     [result.gtin, result.body]
   );
-  res.json({ data: parseGdsProduct(result.body, result.gtin) });
+  const product = parseGdsProduct(result.body, result.gtin);
+  res.json({ data: product ? await localizeGdsPicture(product) : null });
 });
 
 scan.get("/barcodes/:barcode", async (req, res) => {

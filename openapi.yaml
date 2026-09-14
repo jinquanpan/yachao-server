@@ -34,6 +34,18 @@ paths:
                 device: { type: string }
                 platform: { type: string, enum: [android, ios, pc] }
                 login_scope: { type: string, enum: [app, admin, cashier], default: app }
+              example:
+                phone: "13800000000"
+                code: "123456"
+                device: "apifox"
+                platform: "pc"
+                login_scope: "app"
+            example:
+              phone: "13800000000"
+              code: "123456"
+              device: "apifox"
+              platform: "pc"
+              login_scope: "app"
       responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } }
   /auth/oauth/login:
     post:
@@ -424,7 +436,7 @@ paths:
       responses: { "201": { $ref: "#/components/responses/Success" } }
   /scan/gds/products/{barcode}:
     get:
-      summary: 通过 GDS 第三方服务查询 13/14 位条码商品，仅返回名称、条码和描述
+      summary: 通过 GDS 第三方服务查询 13/14 位条码商品，仅返回模板所需的商品字段
       parameters: [{ name: barcode, in: path, required: true, schema: { type: string, pattern: '^\\d{13,14}$' } }]
       responses: { "200": { $ref: "#/components/responses/Success" }, "502": { $ref: "#/components/responses/Error" }, "503": { $ref: "#/components/responses/Error" } }
   /admin/products/{id}/stock-adjustments:
